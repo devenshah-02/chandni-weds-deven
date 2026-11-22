@@ -1,0 +1,672 @@
+import { gsap } from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import Lenis from "lenis";
+import confetti from "canvas-confetti";
+
+gsap.registerPlugin(ScrollTrigger);
+
+/* ------------------------------------------------------------------
+   CONFIG
+   Set RSVP_ENDPOINT to a Formspree / Google Apps Script / API URL to
+   receive replies. Left empty, replies are kept in this browser only.
+------------------------------------------------------------------- */
+const RSVP_ENDPOINT = "";
+const WEDDING_START = new Date("2027-02-14T11:30:00+05:30");
+
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
+/* ------------------------------------------------------------------
+   SMOOTH SCROLL
+------------------------------------------------------------------- */
+const lenis = new Lenis({ duration: 1.15, smoothWheel: !reduced });
+lenis.stop();
+lenis.on("scroll", ScrollTrigger.update);
+gsap.ticker.add((t) => lenis.raf(t * 1000));
+gsap.ticker.lagSmoothing(0);
+
+$$('a[href^="#"]').forEach((a) =>
+  a.addEventListener("click", (e) => {
+    const target = $(a.getAttribute("href"));
+    if (!target) return;
+    e.preventDefault();
+    lenis.scrollTo(target, { offset: -10 });
+  })
+);
+
+/* ------------------------------------------------------------------
+   SPLIT TEXT (chars)
+------------------------------------------------------------------- */
+$$("[data-split]").forEach((el) => {
+  const text = el.textContent;
+  el.setAttribute("aria-label", text);
+  el.innerHTML = [...text]
+    .map((c, i) => (c === " " ? " " : `<span class="ch" style="--i:${i}" aria-hidden="true">${c}</span>`))
+    .join("");
+});
+
+/* ------------------------------------------------------------------
+   MANDALA (generated SVG)
+------------------------------------------------------------------- */
+(function buildMandala() {
+  const svg = $("#mandala");
+  const NS = "http://www.w3.org/2000/svg";
+  const g = document.createElementNS(NS, "g");
+  g.setAttribute("transform", "translate(200 200)");
+  g.setAttribute("fill", "none");
+  g.setAttribute("stroke", "#c9a15b");
+  g.setAttribute("stroke-width", "0.6");
+  const add = (tag, attrs) => {
+    const n = document.createElementNS(NS, tag);
+    Object.entries(attrs).forEach(([k, v]) => n.setAttribute(k, v));
+    g.appendChild(n);
+    return n;
+  };
+  [60, 92, 150, 186].forEach((r, i) => add("circle", { r, "stroke-dasharray": i % 2 ? "2 4" : "none", opacity: 0.7 }));
+  for (let i = 0; i < 24; i++) {
+    const a = (i * 360) / 24;
+    add("path", { d: "M0,-92 C14,-120 14,-136 0,-150 C-14,-136 -14,-120 0,-92Z", transform: `rotate(${a})` });
+  }
+  for (let i = 0; i < 12; i++) {
+    const a = (i * 360) / 12 + 15;
+    add("path", { d: "M0,-60 C22,-70 26,-84 0,-92 C-26,-84 -22,-70 0,-60Z", transform: `rotate(${a})`, opacity: 0.8 });
+  }
+  for (let i = 0; i < 48; i++) {
+    add("circle", { cx: 0, cy: -168, r: 2.2, transform: `rotate(${(i * 360) / 48})`, fill: "#c9a15b", stroke: "none", opacity: 0.5 });
+  }
+  svg.appendChild(g);
+})();
+
+/* ------------------------------------------------------------------
+   FALLING PETALS (canvas)
+------------------------------------------------------------------- */
+const petals = (() => {
+  const c = $("#petals");
+  const ctx = c.getContext("2d");
+  let w, h, dpr, items = [], running = false, density = 0;
+  const colors = ["#e7a8b4", "#d98197", "#f3c9b9", "#e8cf94", "#c9a15b", "#b84a6a"];
+  const resize = () => {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = c.width = innerWidth * dpr;
+    h = c.height = innerHeight * dpr;
+  };
+  const make = (initial) => ({
+    x: Math.random() * w,
+    y: initial ? Math.random() * h : -20 * dpr,
+    s: (6 + Math.random() * 9) * dpr,
+    vy: (0.35 + Math.random() * 0.7) * dpr,
+    vx: (Math.random() - 0.5) * 0.4 * dpr,
+    r: Math.random() * Math.PI * 2,
+    vr: (Math.random() - 0.5) * 0.03,
+    sway: Math.random() * Math.PI * 2,
+    flip: Math.random() * Math.PI * 2,
+    color: colors[(Math.random() * colors.length) | 0],
+    a: 0.28 + Math.random() * 0.32,
+  });
+  const draw = (p) => {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.r);
+    ctx.scale(1, Math.abs(Math.cos(p.flip)) * 0.7 + 0.3);
+    ctx.globalAlpha = p.a;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.moveTo(0, -p.s);
+    ctx.bezierCurveTo(p.s * 0.9, -p.s * 0.6, p.s * 0.7, p.s * 0.6, 0, p.s);
+    ctx.bezierCurveTo(-p.s * 0.7, p.s * 0.6, -p.s * 0.9, -p.s * 0.6, 0, -p.s);
+    ctx.fill();
+    ctx.restore();
+  };
+  const tick = () => {
+    if (!running) return;
+    ctx.clearRect(0, 0, w, h);
+    while (items.length < density) items.push(make(false));
+    items.forEach((p) => {
+      p.sway += 0.012;
+      p.flip += 0.03;
+      p.x += p.vx + Math.sin(p.sway) * 0.5 * dpr;
+      p.y += p.vy;
+      p.r += p.vr;
+      draw(p);
+    });
+    items = items.filter((p) => p.y < h + 30 * dpr);
+    requestAnimationFrame(tick);
+  };
+  resize();
+  addEventListener("resize", resize);
+  return {
+    start(n = 16) {
+      if (reduced) return;
+      density = innerWidth < 700 ? Math.round(n * 0.55) : n;
+      items = Array.from({ length: density }, () => make(true));
+      running = true;
+      tick();
+    },
+    burst(n = 40) {
+      if (reduced) return;
+      for (let i = 0; i < n; i++) {
+        const p = make(false);
+        p.y = -Math.random() * h * 0.4;
+        p.vy *= 2.2;
+        items.push(p);
+      }
+    },
+  };
+})();
+
+/* ------------------------------------------------------------------
+   MUSIC
+------------------------------------------------------------------- */
+const song = $("#song");
+const musicBtn = $("#music");
+song.volume = 0.55;
+const setPlaying = (on) => musicBtn.classList.toggle("is-playing", on);
+song.addEventListener("play", () => setPlaying(true));
+song.addEventListener("pause", () => setPlaying(false));
+musicBtn.addEventListener("click", () => (song.paused ? song.play().catch(() => {}) : song.pause()));
+
+/* ------------------------------------------------------------------
+   INTRO
+------------------------------------------------------------------- */
+const intro = $("#intro");
+const envelope = $("#envelope");
+gsap.timeline({ delay: 0.2 })
+  .to(".intro__kicker", { opacity: 1, y: 0, duration: 1, ease: "power3.out" })
+  .to(envelope, { opacity: 1, y: 0, rotateX: 0, duration: 1.4, ease: "expo.out" }, "-=0.6")
+  .fromTo("#seal", { scale: 0, rotate: -90 }, { scale: 1, rotate: 0, duration: 1, ease: "back.out(1.8)" }, "-=0.9")
+  .to("#introHint", { opacity: 1, duration: 0.8 }, "-=0.4");
+
+// gentle float while waiting
+const floatTween = gsap.to(envelope, { y: -8, duration: 2.4, ease: "sine.inOut", yoyo: true, repeat: -1, delay: 2 });
+
+let opened = false;
+function openInvite() {
+  if (opened) return;
+  opened = true;
+  floatTween.kill();
+  song.play().catch(() => {});
+
+  const tl = gsap.timeline({ defaults: { ease: "power3.inOut" } });
+  tl.to("#introHint, .intro__kicker", { opacity: 0, y: -10, duration: 0.4 })
+    .to("#seal", { scale: 1.25, duration: 0.25, ease: "power2.out" }, 0)
+    .to("#seal", { scale: 0, rotate: 140, opacity: 0, duration: 0.55, ease: "back.in(2)" }, 0.25)
+    .to(".envelope__flap", { rotateX: 180, duration: 0.9 }, 0.55)
+    .set(".envelope__flap", { zIndex: 1 }, 1.0)
+    .to(envelope, { y: "18vh", duration: 1.1 }, 1.25)
+    .to("#letter", { y: "-62%", duration: 1.1 }, 1.25)
+    .set("#letter", { zIndex: 10 }, 2.35)
+    .to("#letter", { y: "-34%", scale: 1.18, duration: 0.8, ease: "power2.out" }, 2.35)
+    .to(".envelope__back, .envelope__pocket, .envelope__flap", { opacity: 0, y: 80, duration: 0.7 }, 2.35)
+    .to("#letter", { scale: 5, opacity: 0, duration: 1, ease: "power3.in" }, 3.4)
+    .to(intro, { opacity: 0, duration: 0.8, ease: "power2.inOut" }, 3.75)
+    .add(() => {
+      intro.remove();
+      document.body.classList.remove("is-locked");
+      lenis.start();
+      ScrollTrigger.refresh();
+      startPage();
+    }, 4.5);
+}
+$("#seal").addEventListener("click", openInvite);
+envelope.addEventListener("click", openInvite);
+
+/* ------------------------------------------------------------------
+   PAGE START (after intro)
+------------------------------------------------------------------- */
+function startPage() {
+  musicBtn.classList.add("is-visible");
+  $("#nav").classList.add("is-visible");
+  petals.start();
+  petals.burst(40);
+
+  gsap.timeline()
+    .from(".ganesh", { scale: 0.4, opacity: 0, duration: 1.2, ease: "back.out(1.6)" })
+    .from(".shloka span", { y: 20, opacity: 0, stagger: 0.12, duration: 0.8, ease: "power3.out" }, "-=0.7")
+    .from(".hero__blessing", { y: 20, opacity: 0, duration: 0.8 }, "-=0.5")
+    .from(".hero__names .name:first-child .ch", { yPercent: 110, opacity: 0, rotate: 8, stagger: 0.06, duration: 1, ease: "expo.out" }, "-=0.4")
+    .from(".hero__weds .line", { scaleX: 0, duration: 0.9, ease: "expo.out" }, "-=0.7")
+    .from(".hero__weds em", { opacity: 0, letterSpacing: "1em", duration: 1 }, "<")
+    .from(".hero__names .name:last-child .ch", { yPercent: 110, opacity: 0, rotate: 8, stagger: 0.06, duration: 1, ease: "expo.out" }, "-=0.8")
+    .from(".hero__tag, .hero__date", { y: 20, opacity: 0, stagger: 0.15, duration: 0.8 }, "-=0.6")
+    .from(".hero__mandala", { scale: 0.6, opacity: 0, duration: 2, ease: "expo.out" }, 0)
+    .from(".scroll-cue", { opacity: 0, duration: 0.8 }, "-=0.2");
+}
+
+/* ------------------------------------------------------------------
+   SCROLL ANIMATIONS
+------------------------------------------------------------------- */
+// generic reveals (skip hero, which animates on open)
+gsap.set($$(".reveal-up").filter((el) => !el.closest(".hero")), { y: 40, opacity: 0 });
+ScrollTrigger.batch($$(".reveal-up").filter((el) => !el.closest(".hero")), {
+  start: "top 88%",
+  onEnter: (els) => gsap.to(els, { y: 0, opacity: 1, duration: 1.1, stagger: 0.12, ease: "expo.out", overwrite: true }),
+});
+
+// hero parallax out
+gsap.to(".hero__inner", {
+  yPercent: 18, opacity: 0.2, ease: "none",
+  scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: true },
+});
+gsap.to(".hero__mandala", {
+  scale: 1.3, ease: "none",
+  scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: true },
+});
+
+// progress bar
+gsap.to("#progress", { scaleX: 1, ease: "none", scrollTrigger: { start: 0, end: "max", scrub: 0.3 } });
+
+// timer cells pop
+gsap.from(".timer__cell", {
+  y: 50, opacity: 0, rotateX: -60, stagger: 0.1, duration: 1.1, ease: "back.out(1.6)",
+  scrollTrigger: { trigger: ".timer", start: "top 88%" },
+});
+
+// families
+gsap.from(".fam-card[data-side='left']", {
+  xPercent: -30, opacity: 0, rotate: -6, duration: 1.4, ease: "expo.out",
+  scrollTrigger: { trigger: ".families__grid", start: "top 80%" },
+});
+gsap.from(".fam-card[data-side='right']", {
+  xPercent: 30, opacity: 0, rotate: 6, duration: 1.4, ease: "expo.out",
+  scrollTrigger: { trigger: ".families__grid", start: "top 80%" },
+});
+gsap.from(".families__mono", {
+  scale: 0, rotate: -180, duration: 1.4, ease: "back.out(1.7)",
+  scrollTrigger: { trigger: ".families__grid", start: "top 75%" },
+});
+
+// story: text reveals + photo slider
+gsap.fromTo(".story__bigword", { xPercent: 0 }, { xPercent: -35, ease: "none", scrollTrigger: { trigger: ".story", start: "top bottom", end: "bottom top", scrub: true } });
+$$(".split-lines").forEach((el) => {
+  gsap.from(el, { y: 60, opacity: 0, skewY: 4, duration: 1.3, ease: "expo.out", scrollTrigger: { trigger: el, start: "top 85%" } });
+});
+gsap.from(".slider__frame", { y: 80, rotate: 6, opacity: 0, duration: 1.4, ease: "expo.out", scrollTrigger: { trigger: ".story__photo", start: "top 80%" } });
+gsap.from(".slider__stamp", { scale: 0, rotate: -120, duration: 1, ease: "back.out(1.8)", delay: 0.4, scrollTrigger: { trigger: ".story__photo", start: "top 80%" } });
+(function slider() {
+  const slides = $$("#sliderStage .slide");
+  const dots = $$("#sliderDots button");
+  const cap = $("#sliderCap"), count = $("#sliderCount");
+  const N = slides.length;
+  let i = 0, busy = false, timer;
+  slides[0].classList.add("is-on");
+  const go = (n, dir = 1) => {
+    n = (n + N) % N;
+    if (n === i || busy) return;
+    busy = true;
+    const from = slides[i], to = slides[n];
+    to.classList.add("is-on");
+    gsap.set(to, { zIndex: 2, opacity: 1 });
+    gsap.set(from, { zIndex: 1 });
+    gsap.fromTo(to, { clipPath: dir > 0 ? "inset(0 0 0 100%)" : "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0%)", duration: 0.9, ease: "expo.inOut" });
+    gsap.fromTo(to.querySelector("img"), { scale: 1.18, xPercent: dir * 8 }, { scale: 1, xPercent: 0, duration: 1.3, ease: "expo.out" });
+    gsap.to(from.querySelector("img"), { xPercent: -dir * 12, duration: 0.9, ease: "expo.inOut", onComplete: () => {
+      from.classList.remove("is-on"); gsap.set(from.querySelector("img"), { xPercent: 0 }); gsap.set([from, to], { clearProps: "zIndex,clipPath" }); busy = false;
+    } });
+    gsap.to(cap, { opacity: 0, y: -8, duration: 0.25, onComplete: () => { cap.textContent = to.querySelector("img").alt; gsap.fromTo(cap, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.5 }); } });
+    count.textContent = `${String(n + 1).padStart(2, "0")} / ${String(N).padStart(2, "0")}`;
+    dots.forEach((d, k) => d.classList.toggle("is-on", k === n));
+    i = n;
+  };
+  const restart = () => { clearInterval(timer); timer = setInterval(() => go(i + 1, 1), 4500); };
+  $("#sliderNext").addEventListener("click", () => { go(i + 1, 1); restart(); });
+  $("#sliderPrev").addEventListener("click", () => { go(i - 1, -1); restart(); });
+  dots.forEach((d, k) => d.addEventListener("click", () => { go(k, k > i ? 1 : -1); restart(); }));
+  $("#slider").addEventListener("keydown", (e) => { if (e.key === "ArrowRight") { go(i + 1, 1); restart(); } if (e.key === "ArrowLeft") { go(i - 1, -1); restart(); } });
+  let x0 = null;
+  const stage = $("#sliderStage");
+  stage.addEventListener("pointerdown", (e) => (x0 = e.clientX));
+  stage.addEventListener("pointerup", (e) => { if (x0 === null) return; const dx = e.clientX - x0; if (Math.abs(dx) > 40) { go(dx < 0 ? i + 1 : i - 1, dx < 0 ? 1 : -1); restart(); } x0 = null; });
+  ScrollTrigger.create({ trigger: "#slider", start: "top bottom", end: "bottom top", onToggle: (st) => (st.isActive ? restart() : clearInterval(timer)) });
+})();
+
+// events: horizontal scroll on desktop, stagger on mobile
+const mm = gsap.matchMedia();
+mm.add("(min-width: 861px)", () => {
+  const track = $("#eventsTrack");
+  const distance = () => Math.max(0, track.scrollWidth - innerWidth);
+  const tween = gsap.to(track, {
+    x: () => -distance(),
+    ease: "none",
+    scrollTrigger: {
+      trigger: "#eventsPin",
+      start: "center center",
+      end: () => "+=" + distance(),
+      pin: true,
+      scrub: 0.8,
+      invalidateOnRefresh: true,
+    },
+  });
+  $$(".ev").forEach((ev) => {
+    gsap.from(ev.querySelector(".ev__img img"), {
+      scale: 1.35, ease: "none",
+      scrollTrigger: { trigger: ev, containerAnimation: tween, start: "left right", end: "right left", scrub: true },
+    });
+  });
+  gsap.from(".ev", {
+    y: 80, opacity: 0, stagger: 0.12, duration: 1.2, ease: "expo.out",
+    scrollTrigger: { trigger: "#eventsPin", start: "top 85%" },
+  });
+});
+mm.add("(max-width: 860px)", () => {
+  $$(".ev").forEach((ev) =>
+    gsap.from(ev, { y: 70, opacity: 0, duration: 1.1, ease: "expo.out", scrollTrigger: { trigger: ev, start: "top 90%" } })
+  );
+});
+
+// venue pin drop
+gsap.from(".venue__icon", {
+  y: -80, opacity: 0, duration: 1.2, ease: "bounce.out",
+  scrollTrigger: { trigger: ".venue__card", start: "top 75%" },
+});
+
+// rsvp card rise
+gsap.from(".rsvp__card", {
+  y: 100, opacity: 0, rotateX: 10, duration: 1.4, ease: "expo.out",
+  scrollTrigger: { trigger: ".rsvp", start: "top 75%" },
+});
+
+// footer names
+gsap.from(".footer__names .ch", {
+  y: 60, opacity: 0, rotate: 10, stagger: 0.04, duration: 1.1, ease: "expo.out",
+  scrollTrigger: { trigger: ".footer", start: "top 75%" },
+});
+gsap.from(".footer__tag", { scale: 0.8, opacity: 0, duration: 1, ease: "back.out(1.6)", scrollTrigger: { trigger: ".footer__tag", start: "top 92%" } });
+
+/* ------------------------------------------------------------------
+   NAV active link
+------------------------------------------------------------------- */
+$$(".nav__links a").forEach((a) => {
+  const sec = $(a.getAttribute("href"));
+  if (!sec) return;
+  ScrollTrigger.create({
+    trigger: sec, start: "top 50%", end: "bottom 50%",
+    onToggle: (self) => a.classList.toggle("is-active", self.isActive),
+  });
+});
+
+/* ------------------------------------------------------------------
+   TAP TO REVEAL
+------------------------------------------------------------------- */
+(function tapReveal() {
+  const foil = $("#foil");
+  gsap.set(".scratch__under > *", { opacity: 0, y: 20 });
+  foil.addEventListener("click", () => {
+    if (foil.classList.contains("is-open")) return;
+    foil.classList.add("is-open", "is-gone");
+    const r = foil.getBoundingClientRect();
+    confetti({
+      particleCount: 130, spread: 90, startVelocity: 40, ticks: 220,
+      origin: { x: (r.left + r.width / 2) / innerWidth, y: (r.top + r.height / 2) / innerHeight },
+      colors: ["#c9a15b", "#e8cf94", "#8b2448", "#f1d9d2", "#ffffff"], disableForReducedMotion: true,
+    });
+    gsap.to(".scratch__under > *", { opacity: 1, y: 0, stagger: 0.12, duration: 0.9, ease: "expo.out", delay: 0.35 });
+    gsap.fromTo(".scratch__big", { scale: 0.6 }, { scale: 1, duration: 1.2, ease: "elastic.out(1, .5)", delay: 0.35 });
+  });
+})();
+
+/* ------------------------------------------------------------------
+   COUNTDOWN
+------------------------------------------------------------------- */
+(function countdown() {
+  const els = Object.fromEntries($$(".timer__num").map((el) => [el.dataset.unit, el]));
+  const set = (el, v) => {
+    const s = String(v).padStart(2, "0");
+    if (el.textContent === s) return;
+    el.textContent = s;
+    el.classList.remove("tick");
+    void el.offsetWidth;
+    el.classList.add("tick");
+  };
+  const update = () => {
+    let diff = Math.max(0, WEDDING_START - Date.now());
+    const d = Math.floor(diff / 864e5); diff -= d * 864e5;
+    const h = Math.floor(diff / 36e5); diff -= h * 36e5;
+    const m = Math.floor(diff / 6e4); diff -= m * 6e4;
+    const s = Math.floor(diff / 1e3);
+    set(els.d, d); set(els.h, h); set(els.m, m); set(els.s, s);
+  };
+  update();
+  setInterval(update, 1000);
+})();
+
+/* ------------------------------------------------------------------
+   TILT + POINTER LIGHT (family cards)
+------------------------------------------------------------------- */
+if (finePointer && !reduced) {
+  $$(".tilt").forEach((card) => {
+    const inner = card.querySelector(".fam-card__arch");
+    card.addEventListener("pointermove", (e) => {
+      const r = card.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width;
+      const py = (e.clientY - r.top) / r.height;
+      inner.style.setProperty("--mx", `${px * 100}%`);
+      inner.style.setProperty("--my", `${py * 100}%`);
+      gsap.to(inner, { rotateY: (px - 0.5) * 12, rotateX: (0.5 - py) * 10, duration: 0.6, ease: "power3.out" });
+    });
+    card.addEventListener("pointerleave", () => gsap.to(inner, { rotateX: 0, rotateY: 0, duration: 1, ease: "elastic.out(1, 0.5)" }));
+  });
+}
+
+/* ------------------------------------------------------------------
+   CURSOR + MAGNETIC
+------------------------------------------------------------------- */
+if (finePointer && !reduced) {
+  const cur = $("#cursor");
+  const xTo = gsap.quickTo(cur, "x", { duration: 0.35, ease: "power3" });
+  const yTo = gsap.quickTo(cur, "y", { duration: 0.35, ease: "power3" });
+  addEventListener("pointermove", (e) => { cur.style.opacity = 1; xTo(e.clientX); yTo(e.clientY); });
+  document.addEventListener("pointerleave", () => (cur.style.opacity = 0));
+  const hoverables = "a, button, .ev__img, input, textarea";
+  document.addEventListener("pointerover", (e) => e.target.closest(hoverables) && cur.classList.add("is-hover"));
+  document.addEventListener("pointerout", (e) => e.target.closest(hoverables) && cur.classList.remove("is-hover"));
+
+  $$(".magnetic").forEach((el) => {
+    el.addEventListener("pointermove", (e) => {
+      const r = el.getBoundingClientRect();
+      gsap.to(el, { x: (e.clientX - r.left - r.width / 2) * 0.25, y: (e.clientY - r.top - r.height / 2) * 0.35, duration: 0.4, ease: "power3.out" });
+    });
+    el.addEventListener("pointerleave", () => gsap.to(el, { x: 0, y: 0, duration: 0.8, ease: "elastic.out(1, 0.4)" }));
+  });
+}
+
+/* ------------------------------------------------------------------
+   LIGHTBOX
+------------------------------------------------------------------- */
+const lb = $("#lightbox");
+const lbImg = lb.querySelector("img");
+$$(".ev__img").forEach((b) =>
+  b.addEventListener("click", () => {
+    lbImg.src = b.dataset.full;
+    lbImg.alt = b.querySelector("img").alt;
+    lb.classList.add("is-open");
+    lb.setAttribute("aria-hidden", "false");
+    lenis.stop();
+  })
+);
+const closeLb = () => { lb.classList.remove("is-open"); lb.setAttribute("aria-hidden", "true"); lenis.start(); };
+lb.addEventListener("click", (e) => (e.target === lb || e.target.closest(".lightbox__close")) && closeLb());
+addEventListener("keydown", (e) => e.key === "Escape" && lb.classList.contains("is-open") && closeLb());
+
+/* ------------------------------------------------------------------
+   ADD TO CALENDAR (.ics)
+------------------------------------------------------------------- */
+const EVENTS = {
+  haldi: { title: "Haldi Ceremony · Chandni & Deven", start: "20270214T060000Z", end: "20270214T093000Z" },
+  sangeet: { title: "Sangeet Night · Chandni & Deven", start: "20270214T133000Z", end: "20270214T183000Z" },
+  pool: { title: "Poolside Celebration · Chandni & Deven", start: "20270215T040000Z", end: "20270215T073000Z" },
+  wedding: { title: "Shubh Vivah · Chandni & Deven", start: "20270215T103000Z", end: "20270215T173000Z" },
+};
+$$("[data-cal]").forEach((a) =>
+  a.addEventListener("click", (e) => {
+    e.preventDefault();
+    const ev = EVENTS[a.dataset.cal];
+    const ics = [
+      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ChandniWedsDeven//EN", "BEGIN:VEVENT",
+      `UID:${a.dataset.cal}-chandni-deven-2027`, `DTSTAMP:${new Date().toISOString().replace(/[-:]|\.\d+/g, "")}`,
+      `DTSTART:${ev.start}`, `DTEND:${ev.end}`, `SUMMARY:${ev.title}`,
+      "LOCATION:Hotel Gautam\\, Lonavala", "END:VEVENT", "END:VCALENDAR",
+    ].join("\r\n");
+    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+    const link = Object.assign(document.createElement("a"), { href: url, download: `${a.dataset.cal}.ics` });
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast("Calendar invite ready ✨");
+  })
+);
+
+/* ------------------------------------------------------------------
+   RSVP
+------------------------------------------------------------------- */
+(function rsvp() {
+  const form = $("#rsvpForm");
+  const toggle = $("#attendToggle");
+  const yesBlock = $("#rsvpYes");
+  const miss = $("#rsvpMiss");
+  const err = $("#rsvpErr");
+  const done = $("#rsvpDone");
+  const guestOut = $("#guestOut");
+  let guests = 1;
+
+  $$("button", toggle).forEach((b) =>
+    b.addEventListener("click", () => {
+      const yes = b.dataset.val === "yes";
+      $$("button", toggle).forEach((x) => x.classList.toggle("is-on", x === b));
+      toggle.classList.toggle("is-no", !yes);
+      form.attending.value = b.dataset.val;
+      if (yes) {
+        miss.style.display = "none";
+        gsap.fromTo(yesBlock, { height: 0, opacity: 0 }, { height: "auto", opacity: 1, duration: 0.6, ease: "expo.out", onStart: () => (yesBlock.style.display = "grid") });
+      } else {
+        gsap.to(yesBlock, { height: 0, opacity: 0, duration: 0.5, ease: "expo.inOut", onComplete: () => (yesBlock.style.display = "none") });
+        miss.style.display = "block";
+        gsap.fromTo(miss, { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6 });
+      }
+    })
+  );
+
+  $$("[data-step]").forEach((b) =>
+    b.addEventListener("click", () => {
+      guests = Math.min(10, Math.max(1, guests + Number(b.dataset.step)));
+      guestOut.textContent = guests;
+      form.guests.value = guests;
+      gsap.fromTo(guestOut, { scale: 1.4, color: "#c9a15b" }, { scale: 1, color: "#6b1a35", duration: 0.5, ease: "back.out(2)" });
+    })
+  );
+
+  $$("#moodChips button").forEach((b) =>
+    b.addEventListener("click", () => {
+      $$("#moodChips button").forEach((x) => x.classList.toggle("is-on", x === b));
+      form.mood.value = b.dataset.val;
+      const r = b.getBoundingClientRect();
+      confetti({
+        particleCount: 18, spread: 50, startVelocity: 18, scalar: 0.7, ticks: 80,
+        origin: { x: (r.left + r.width / 2) / innerWidth, y: (r.top + r.height / 2) / innerHeight },
+        colors: ["#c9a15b", "#e8cf94", "#8b2448"], disableForReducedMotion: true,
+      });
+    })
+  );
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    err.textContent = "";
+    const name = form.name.value.trim();
+    const attending = form.attending.value === "yes";
+    if (!name) {
+      form.name.classList.remove("is-invalid"); void form.name.offsetWidth;
+      form.name.classList.add("is-invalid");
+      err.textContent = "Please tell us your name.";
+      form.name.focus();
+      return;
+    }
+    form.name.classList.remove("is-invalid");
+    if (attending && !form.mood.value) {
+      err.textContent = "Pick your wedding mood!";
+      gsap.fromTo("#moodChips", { x: -6 }, { x: 0, duration: 0.5, ease: "elastic.out(1, 0.3)" });
+      return;
+    }
+
+    const payload = {
+      name,
+      attending,
+      guests: attending ? guests : 0,
+      mood: attending ? form.mood.value : "",
+      note: form.note.value.trim(),
+      advice: form.advice.value.trim(),
+      at: new Date().toISOString(),
+    };
+
+    const btn = form.querySelector("[type=submit]");
+    btn.disabled = true;
+    try {
+      if (RSVP_ENDPOINT) {
+        const res = await fetch(RSVP_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error("bad status");
+      }
+      try {
+        const all = JSON.parse(localStorage.getItem("cwd-rsvps") || "[]");
+        all.push(payload);
+        localStorage.setItem("cwd-rsvps", JSON.stringify(all));
+      } catch {}
+    } catch {
+      err.textContent = "Something went wrong. Please try again.";
+      btn.disabled = false;
+      return;
+    }
+    btn.disabled = false;
+
+    $("#doneTitle").textContent = attending ? `Yay, ${name.split(" ")[0]}!` : `Thank you, ${name.split(" ")[0]}`;
+    $("#doneMsg").textContent = attending
+      ? "We can't wait to celebrate with you. 🎉"
+      : "We'll miss you, and we'll be thinking of you on our day. 💛";
+
+    gsap.to(form, {
+      opacity: 0, y: -20, duration: 0.4, onComplete: () => {
+        form.hidden = true;
+        done.hidden = false;
+        gsap.fromTo(done, { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.7, ease: "expo.out" });
+        ScrollTrigger.refresh();
+      },
+    });
+
+    if (attending) {
+      const fire = (ratio, opts) => confetti({ particleCount: Math.floor(220 * ratio), origin: { y: 0.65 }, colors: ["#c9a15b", "#e8cf94", "#8b2448", "#f1d9d2", "#fff"], disableForReducedMotion: true, ...opts });
+      fire(0.25, { spread: 26, startVelocity: 55 });
+      fire(0.2, { spread: 60 });
+      fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+      fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+      fire(0.1, { spread: 120, startVelocity: 45 });
+      petals.burst(50);
+    }
+  });
+
+  $("#rsvpAgain").addEventListener("click", () => {
+    done.hidden = true;
+    form.hidden = false;
+    gsap.to(form, { opacity: 1, y: 0, duration: 0.5 });
+    ScrollTrigger.refresh();
+  });
+})();
+
+/* ------------------------------------------------------------------
+   HASHTAG + TOAST
+------------------------------------------------------------------- */
+const toastEl = $("#toast");
+let toastT;
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add("is-show");
+  clearTimeout(toastT);
+  toastT = setTimeout(() => toastEl.classList.remove("is-show"), 2200);
+}
+$("#hashtag").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText("#ChandniWedsDeven"); toast("Hashtag copied 💕"); }
+  catch { toast("#ChandniWedsDeven"); }
+});
+
+addEventListener("load", () => ScrollTrigger.refresh());
