@@ -372,7 +372,6 @@ function openInvite() {
       lenis.start();
       ScrollTrigger.refresh();
       startPage();
-      song.play().catch(() => {});
     }, 4.5);
 }
 $("#seal").addEventListener("click", openInvite);
@@ -394,6 +393,7 @@ function startPage() {
     .from(".hero__weds .line", { scaleX: 0, duration: 0.9, ease: "expo.out" }, "-=0.7")
     .from(".hero__weds em", { opacity: 0, letterSpacing: "1em", duration: 1 }, "<")
     .from(".hero__names .name:last-child .ch", { yPercent: 110, opacity: 0, rotate: 8, stagger: 0.06, duration: 1, ease: "expo.out" }, "-=0.8")
+    .set(".hero__names .ch", { clearProps: "all" })
     .from(".hero__tag, .hero__date", { y: 20, opacity: 0, stagger: 0.15, duration: 0.8 }, "-=0.6")
     .from(".hero__mandala", { scale: 0.6, opacity: 0, duration: 2, ease: "expo.out" }, 0)
     .from(".scroll-cue", { opacity: 0, duration: 0.8 }, "-=0.2");
@@ -568,6 +568,9 @@ gsap.from(".footer__tag", { scale: 0.8, opacity: 0, duration: 1, ease: "back.out
     gsap.fromTo(".scratch__big", { scale: 0.6 }, { scale: 1, duration: 1.2, ease: "elastic.out(1, .5)", delay: 0.35 });
     timer.classList.add("is-visible");
     gsap.fromTo(".timer__cell", { opacity: 0, y: 24, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, stagger: 0.1, duration: 0.9, ease: "back.out(1.6)", delay: 0.55 });
+
+    // music begins once the dates are revealed, not before
+    song.play().catch(() => {});
   });
 })();
 
