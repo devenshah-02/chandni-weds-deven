@@ -42,9 +42,12 @@ $$('a[href^="#"]').forEach((a) =>
 $$("[data-split]").forEach((el) => {
   const text = el.textContent;
   el.setAttribute("aria-label", text);
-  el.innerHTML = [...text]
-    .map((c, i) => (c === " " ? " " : `<span class="ch" style="--i:${i}" aria-hidden="true">${c}</span>`))
-    .join("");
+  let i = 0;
+  el.innerHTML = text
+    .split(" ")
+    .map((word) => [...word].map((c) => `<span class="ch" style="--i:${i++}" aria-hidden="true">${c}</span>`).join(""))
+    .map((word) => `<span class="word">${word}</span>`)
+    .join(" ");
 });
 
 /* ------------------------------------------------------------------
