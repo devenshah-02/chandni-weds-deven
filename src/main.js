@@ -333,6 +333,17 @@ song.addEventListener("play", () => setPlaying(true));
 song.addEventListener("pause", () => setPlaying(false));
 musicBtn.addEventListener("click", () => (song.paused ? song.play().catch(() => {}) : song.pause()));
 
+// safety net: browsers only allow audio-with-sound to autoplay inside a
+// real user gesture. Catch the very first tap/click/key anywhere on the
+// page (not just the seal) so playback reliably starts even if a tap
+// lands slightly off-target, and so the later auto-open fallback (which
+// fires on a timer, not a gesture) has already been unlocked by then.
+const unlockAudio = () => {
+  if (song.paused) song.play().catch(() => {});
+};
+addEventListener("pointerdown", unlockAudio, { once: true });
+addEventListener("keydown", unlockAudio, { once: true });
+
 /* ------------------------------------------------------------------
    INTRO
 ------------------------------------------------------------------- */
