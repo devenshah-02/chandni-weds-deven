@@ -157,6 +157,137 @@ const petals = (() => {
 })();
 
 /* ------------------------------------------------------------------
+   EVENT FX (ambient particles themed per event: haldi marigolds,
+   sangeet glitter, wedding rose petals, pool droplets)
+------------------------------------------------------------------- */
+const PALETTES = {
+  haldi: { mode: "fall", colors: ["#f7d873", "#e0a21b", "#ffe8a3"] },
+  sangeet: { mode: "float", colors: ["#f7d873", "#ffffff", "#e8cf94"] },
+  wedding: { mode: "fall", colors: ["#8b1e3f", "#e7b6a8", "#c9627e"] },
+  pool: { mode: "fall", colors: ["#1f8a8a", "#7fd3cf", "#bfe9e6"] },
+};
+
+function makeEventFX(canvas, kind) {
+  const ctx = canvas.getContext("2d");
+  const cfg = PALETTES[kind];
+  let w = 0, h = 0, dpr = 1, items = [], density = 0, running = false, raf = null;
+
+  const resize = () => {
+    const r = canvas.parentElement.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = canvas.width = Math.max(1, Math.round(r.width * dpr));
+    h = canvas.height = Math.max(1, Math.round(r.height * dpr));
+  };
+
+  const make = (initial) => {
+    const color = cfg.colors[(Math.random() * cfg.colors.length) | 0];
+    const x = Math.random() * w;
+    if (kind === "haldi")
+      return { x, y: initial ? Math.random() * h : -16 * dpr, s: (5 + Math.random() * 6) * dpr, vy: (0.5 + Math.random() * 0.6) * dpr, vx: (Math.random() - 0.5) * 0.3 * dpr, r: Math.random() * Math.PI * 2, vr: (Math.random() - 0.5) * 0.04, sway: Math.random() * Math.PI * 2, color };
+    if (kind === "wedding")
+      return { x, y: initial ? Math.random() * h : -16 * dpr, s: (6 + Math.random() * 8) * dpr, vy: (0.4 + Math.random() * 0.6) * dpr, vx: (Math.random() - 0.5) * 0.35 * dpr, r: Math.random() * Math.PI * 2, vr: (Math.random() - 0.5) * 0.05, sway: Math.random() * Math.PI * 2, color };
+    if (kind === "pool")
+      return { x, y: initial ? Math.random() * h : -16 * dpr, s: (2.4 + Math.random() * 3) * dpr, vy: (1.6 + Math.random() * 1.4) * dpr, vx: (Math.random() - 0.5) * 0.15 * dpr, color };
+    // sangeet glitter — floats and twinkles instead of falling
+    return { x, y: Math.random() * h, s: (1.3 + Math.random() * 2.1) * dpr, vy: -(0.12 + Math.random() * 0.2) * dpr, vx: (Math.random() - 0.5) * 0.25 * dpr, tw: Math.random() * Math.PI * 2, vtw: 0.05 + Math.random() * 0.08, color };
+  };
+
+  const drawFlower = (p) => {
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+    for (let i = 0; i < 5; i++) {
+      ctx.save(); ctx.rotate((Math.PI * 2 / 5) * i);
+      ctx.beginPath(); ctx.ellipse(0, -p.s * 0.55, p.s * 0.42, p.s * 0.62, 0, 0, Math.PI * 2);
+      ctx.fillStyle = p.color; ctx.fill(); ctx.restore();
+    }
+    ctx.beginPath(); ctx.arc(0, 0, p.s * 0.3, 0, Math.PI * 2); ctx.fillStyle = "#b9780f"; ctx.fill();
+    ctx.restore();
+  };
+  const drawPetalShape = (p) => {
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+    ctx.beginPath();
+    ctx.moveTo(0, -p.s);
+    ctx.bezierCurveTo(p.s * 0.9, -p.s * 0.6, p.s * 0.7, p.s * 0.6, 0, p.s);
+    ctx.bezierCurveTo(-p.s * 0.7, p.s * 0.6, -p.s * 0.9, -p.s * 0.6, 0, -p.s);
+    ctx.fillStyle = p.color; ctx.fill();
+    ctx.restore();
+  };
+  const drawDroplet = (p) => {
+    ctx.save(); ctx.translate(p.x, p.y); ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.moveTo(0, -p.s * 1.6);
+    ctx.quadraticCurveTo(p.s, 0, 0, p.s);
+    ctx.quadraticCurveTo(-p.s, 0, 0, -p.s * 1.6);
+    ctx.fillStyle = p.color; ctx.fill();
+    ctx.restore();
+  };
+  const drawGlitter = (p) => {
+    const a = 0.35 + Math.abs(Math.sin(p.tw)) * 0.65;
+    ctx.save(); ctx.translate(p.x, p.y); ctx.globalAlpha = a;
+    ctx.globalCompositeOperation = "lighter";
+    ctx.shadowColor = p.color; ctx.shadowBlur = p.s * 3;
+    ctx.beginPath(); ctx.arc(0, 0, p.s, 0, Math.PI * 2);
+    ctx.fillStyle = p.color; ctx.fill();
+    ctx.restore();
+  };
+
+  const tick = () => {
+    if (!running) return;
+    ctx.clearRect(0, 0, w, h);
+    items.forEach((p) => {
+      if (kind === "haldi" || kind === "wedding") {
+        p.sway += 0.015; p.x += p.vx + Math.sin(p.sway) * 0.4 * dpr; p.y += p.vy; p.r += p.vr;
+        kind === "haldi" ? drawFlower(p) : drawPetalShape(p);
+      } else if (kind === "pool") {
+        p.x += p.vx; p.y += p.vy; drawDroplet(p);
+      } else {
+        p.tw += p.vtw; p.x += p.vx; p.y += p.vy; drawGlitter(p);
+      }
+    });
+    if (cfg.mode === "fall") {
+      items = items.filter((p) => p.y < h + 24 * dpr);
+      while (items.length < density) items.push(make(false));
+    } else {
+      items.forEach((p) => { if (p.y < -10 * dpr) { p.y = h + 10 * dpr; p.x = Math.random() * w; } });
+    }
+    raf = requestAnimationFrame(tick);
+  };
+
+  resize();
+  new ResizeObserver(resize).observe(canvas.parentElement);
+
+  return {
+    start(n) {
+      if (reduced || running) return;
+      density = n;
+      resize();
+      items = Array.from({ length: density }, () => make(true));
+      running = true;
+      tick();
+    },
+    stop() {
+      if (!running) return;
+      running = false;
+      if (raf) cancelAnimationFrame(raf);
+      ctx.clearRect(0, 0, w, h);
+      items = [];
+    },
+  };
+}
+
+(function eventFX() {
+  const density = { haldi: 24, sangeet: 32, wedding: 28, pool: 26 };
+  $$(".ev__fx").forEach((canvas) => {
+    const kind = canvas.dataset.fx;
+    const fx = makeEventFX(canvas, kind);
+    const io = new IntersectionObserver(
+      (entries) => entries.forEach((e) => (e.isIntersecting ? fx.start(density[kind] || 24) : fx.stop())),
+      { threshold: 0.35 }
+    );
+    io.observe(canvas.closest(".ev"));
+  });
+})();
+
+/* ------------------------------------------------------------------
    MUSIC
 ------------------------------------------------------------------- */
 const song = $("#song");
