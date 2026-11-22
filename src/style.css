@@ -18,7 +18,8 @@
 
   --f-serif: "Cormorant Garamond", Georgia, serif;
   --f-display: "Italiana", "Cormorant Garamond", serif;
-  --f-script: "Pinyon Script", cursive;
+  --f-script: "Cormorant Garamond", Georgia, serif;
+  --f-caps: "Jost", "Helvetica Neue", Arial, sans-serif;
   --f-deva: "Tiro Devanagari Sanskrit", serif;
 
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -803,4 +804,25 @@ form { display: grid; gap: 20px; margin-top: 18px; }
   .eyebrow { letter-spacing: .26em; gap: .6em; }
   .eyebrow::before, .eyebrow::after { width: 16px; }
   body { font-size: 17px; }
+}
+
+/* =========================================================
+   READABILITY PASS
+   Pinyon Script was swapped for Cormorant Garamond (italic, bold)
+   wherever names/monograms appear, and a clean Jost sans-serif is
+   used for every small uppercase label so copy stays legible.
+   ========================================================= */
+.title em, .seal__mono, .nav__mono, .letter__names span, .fam-card h3,
+.families__mono > span, .story__sign em, .slider__stamp b, .rsvp__mono,
+.rsvp__done h3, .footer__names, .scratch__big b, .scratch__month, .foil__seal b {
+  font-style: italic;
+  font-weight: 600;
+}
+
+.eyebrow, .sub, .nav__links a, .music__label, .hero__tag, .hero__date small,
+.scratch__day, .foil__hint, .timer__lbl, .countdown__note, .fam-card__role,
+.fam-card__kin li span, .ev__day, .ev__zoom, .ev__cal, .venue__note, .btn,
+.footer__tag small, .letter__names em, .letter__date, .intro__kicker,
+.families__ring text, .slider__stamp text, .seal__ring text {
+  font-family: var(--f-caps);
 }
