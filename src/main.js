@@ -352,7 +352,6 @@ function openInvite() {
   if (opened) return;
   opened = true;
   floatTween.kill();
-  song.play().catch(() => {});
 
   const tl = gsap.timeline({ defaults: { ease: "power3.inOut" } });
   tl.to("#introHint, .intro__kicker", { opacity: 0, y: -10, duration: 0.4 })
@@ -373,6 +372,7 @@ function openInvite() {
       lenis.start();
       ScrollTrigger.refresh();
       startPage();
+      song.play().catch(() => {});
     }, 4.5);
 }
 $("#seal").addEventListener("click", openInvite);
@@ -383,7 +383,6 @@ envelope.addEventListener("click", openInvite);
 ------------------------------------------------------------------- */
 function startPage() {
   musicBtn.classList.add("is-visible");
-  $("#nav").classList.add("is-visible");
   petals.start();
   petals.burst(40);
 
@@ -541,34 +540,34 @@ gsap.from(".footer__names .ch", {
 gsap.from(".footer__tag", { scale: 0.8, opacity: 0, duration: 1, ease: "back.out(1.6)", scrollTrigger: { trigger: ".footer__tag", start: "top 92%" } });
 
 /* ------------------------------------------------------------------
-   NAV active link
-------------------------------------------------------------------- */
-$$(".nav__links a").forEach((a) => {
-  const sec = $(a.getAttribute("href"));
-  if (!sec) return;
-  ScrollTrigger.create({
-    trigger: sec, start: "top 50%", end: "bottom 50%",
-    onToggle: (self) => a.classList.toggle("is-active", self.isActive),
-  });
-});
-
-/* ------------------------------------------------------------------
    TAP TO REVEAL
 ------------------------------------------------------------------- */
 (function tapReveal() {
   const foil = $("#foil");
+  const timer = $("#timer");
   gsap.set(".scratch__under > *", { opacity: 0, y: 20 });
   foil.addEventListener("click", () => {
     if (foil.classList.contains("is-open")) return;
+    gsap.fromTo(foil, { scale: 1 }, { scale: 0.94, duration: 0.12, yoyo: true, repeat: 1, ease: "power2.inOut" });
     foil.classList.add("is-open", "is-gone");
     const r = foil.getBoundingClientRect();
-    confetti({
-      particleCount: 130, spread: 90, startVelocity: 40, ticks: 220,
-      origin: { x: (r.left + r.width / 2) / innerWidth, y: (r.top + r.height / 2) / innerHeight },
-      colors: ["#c9a15b", "#e8cf94", "#8b2448", "#f1d9d2", "#ffffff"], disableForReducedMotion: true,
-    });
+    const ox = (r.left + r.width / 2) / innerWidth;
+    const oy = (r.top + r.height / 2) / innerHeight;
+    const colors = ["#c9a15b", "#e8cf94", "#8b2448", "#f1d9d2", "#ffffff"];
+
+    // firework-style layered burst: a bright central pop, a slower
+    // star shower, then two side cannons for a celebratory finale
+    confetti({ particleCount: 140, spread: 100, startVelocity: 48, ticks: 240, scalar: 1.1, origin: { x: ox, y: oy }, colors, disableForReducedMotion: true });
+    confetti({ particleCount: 70, spread: 160, startVelocity: 28, ticks: 260, shapes: ["star"], scalar: 0.9, origin: { x: ox, y: oy }, colors, disableForReducedMotion: true });
+    setTimeout(() => {
+      confetti({ particleCount: 60, angle: 60, spread: 65, startVelocity: 55, origin: { x: 0.08, y: 0.7 }, colors, disableForReducedMotion: true });
+      confetti({ particleCount: 60, angle: 120, spread: 65, startVelocity: 55, origin: { x: 0.92, y: 0.7 }, colors, disableForReducedMotion: true });
+    }, 220);
+
     gsap.to(".scratch__under > *", { opacity: 1, y: 0, stagger: 0.12, duration: 0.9, ease: "expo.out", delay: 0.35 });
     gsap.fromTo(".scratch__big", { scale: 0.6 }, { scale: 1, duration: 1.2, ease: "elastic.out(1, .5)", delay: 0.35 });
+    timer.classList.add("is-visible");
+    gsap.fromTo(".timer__cell", { opacity: 0, y: 24, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, stagger: 0.1, duration: 0.9, ease: "back.out(1.6)", delay: 0.55 });
   });
 })();
 
