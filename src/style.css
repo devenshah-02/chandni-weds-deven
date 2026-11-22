@@ -380,6 +380,11 @@ section { position: relative; z-index: 2; padding: clamp(80px, 12vw, 150px) var(
 .scratch__big b { font-family: var(--f-script); color: var(--gold); font-weight: 400; margin: 0 .1em; font-size: .7em; }
 .scratch__month { font-family: var(--f-script); font-size: 1.8rem; color: var(--wine-2); line-height: 1.1; }
 .foil { position: absolute; inset: 0; padding: 0; perspective: 1200px; cursor: pointer; border-radius: 22px; }
+.foil.is-urgent { animation: foilUrge 1.1s ease-in-out infinite; }
+@keyframes foilUrge {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(232,207,148,.55); }
+  50% { transform: scale(1.03); box-shadow: 0 0 0 16px rgba(232,207,148,0); }
+}
 .foil__half {
   position: absolute; top: 0; bottom: 0; width: 50.5%;
   background:

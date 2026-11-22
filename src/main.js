@@ -607,10 +607,15 @@ gsap.from(".footer__tag", { scale: 0.8, opacity: 0, duration: 1, ease: "back.out
 ------------------------------------------------------------------- */
 (function tapReveal() {
   const foil = $("#foil");
+  const scratch = $("#scratch");
   const timer = $("#timer");
   gsap.set(".scratch__under > *", { opacity: 0, y: 20 });
-  foil.addEventListener("click", () => {
+
+  function revealDate() {
     if (foil.classList.contains("is-open")) return;
+    clearTimeout(foilUrgeTimer);
+    clearTimeout(foilAutoTimer);
+    foil.classList.remove("is-urgent");
     gsap.fromTo(foil, { scale: 1 }, { scale: 0.94, duration: 0.12, yoyo: true, repeat: 1, ease: "power2.inOut" });
     foil.classList.add("is-open", "is-gone");
     const r = foil.getBoundingClientRect();
@@ -631,7 +636,22 @@ gsap.from(".footer__tag", { scale: 0.8, opacity: 0, duration: 1, ease: "back.out
     gsap.fromTo(".scratch__big", { scale: 0.6 }, { scale: 1, duration: 1.2, ease: "elastic.out(1, .5)", delay: 0.35 });
     timer.classList.add("is-visible");
     gsap.fromTo(".timer__cell", { opacity: 0, y: 24, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, stagger: 0.1, duration: 0.9, ease: "back.out(1.6)", delay: 0.55 });
-  });
+  }
+
+  foil.addEventListener("click", revealDate);
+
+  // elderly-proofing: once this card scrolls into view, nudge harder after a
+  // few seconds, then auto-reveal the date for them if still untapped at 10s
+  let foilUrgeTimer, foilAutoTimer;
+  const foilObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting || foil.classList.contains("is-open")) return;
+      foilObserver.disconnect();
+      foilUrgeTimer = setTimeout(() => foil.classList.add("is-urgent"), 4000);
+      foilAutoTimer = setTimeout(() => revealDate(), 10000);
+    });
+  }, { threshold: 0.5 });
+  foilObserver.observe(scratch);
 })();
 
 /* ------------------------------------------------------------------
