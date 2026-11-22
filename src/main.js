@@ -347,11 +347,25 @@ gsap.timeline({ delay: 0.2 })
 // gentle float while waiting
 const floatTween = gsap.to(envelope, { y: -8, duration: 2.4, ease: "sine.inOut", yoyo: true, repeat: -1, delay: 2 });
 
+// elderly-proofing: if the seal sits untapped, nudge harder, then open it for them
+const seal = $("#seal");
+const introHint = $("#introHint");
+const urgeTimer = setTimeout(() => {
+  seal.classList.add("is-urgent");
+  introHint.classList.add("is-urgent");
+}, 6000);
+const autoOpenTimer = setTimeout(() => openInvite(), 14000);
+
 let opened = false;
 function openInvite() {
   if (opened) return;
   opened = true;
+  clearTimeout(urgeTimer);
+  clearTimeout(autoOpenTimer);
   floatTween.kill();
+
+  // start the music the moment the seal is tapped, not after any later step
+  song.play().catch(() => {});
 
   const tl = gsap.timeline({ defaults: { ease: "power3.inOut" } });
   tl.to("#introHint, .intro__kicker", { opacity: 0, y: -10, duration: 0.4 })
@@ -384,6 +398,7 @@ function startPage() {
   musicBtn.classList.add("is-visible");
   petals.start();
   petals.burst(40);
+  initScrollNudge();
 
   gsap.timeline()
     .from(".ganesh", { scale: 0.4, opacity: 0, duration: 1.2, ease: "back.out(1.6)" })
@@ -397,6 +412,43 @@ function startPage() {
     .from(".hero__tag, .hero__date", { y: 20, opacity: 0, stagger: 0.15, duration: 0.8 }, "-=0.6")
     .from(".hero__mandala", { scale: 0.6, opacity: 0, duration: 2, ease: "expo.out" }, 0)
     .from(".scroll-cue", { opacity: 0, duration: 0.8 }, "-=0.2");
+}
+
+/* ------------------------------------------------------------------
+   SCROLL NUDGE
+   Elderly-proofing: if nobody scrolls within ~16s of landing on the
+   hero, show an unmissable "scroll down" hint; if that's still
+   ignored, gently auto-scroll a bit so they see it's safe to continue.
+   The moment any real scrolling happens, this watcher retires for good.
+------------------------------------------------------------------- */
+function initScrollNudge() {
+  const nudge = $("#scrollNudge");
+  const SHOW_AFTER = 16000;
+  const AUTO_SCROLL_AFTER = 26000;
+  const started = Date.now();
+  let engaged = false, nudged = false, autoScrolled = false;
+
+  const stopWatching = () => {
+    engaged = true;
+    nudge.classList.remove("is-visible");
+    clearInterval(poll);
+  };
+  lenis.on("scroll", () => {
+    if (!engaged && window.scrollY > 60) stopWatching();
+  });
+
+  const poll = setInterval(() => {
+    if (engaged) return;
+    const idle = Date.now() - started;
+    if (!nudged && idle > SHOW_AFTER) {
+      nudged = true;
+      nudge.classList.add("is-visible");
+    }
+    if (nudged && !autoScrolled && idle > AUTO_SCROLL_AFTER) {
+      autoScrolled = true;
+      lenis.scrollTo(innerHeight * 0.85, { duration: 1.8 });
+    }
+  }, 1000);
 }
 
 /* ------------------------------------------------------------------
@@ -568,9 +620,6 @@ gsap.from(".footer__tag", { scale: 0.8, opacity: 0, duration: 1, ease: "back.out
     gsap.fromTo(".scratch__big", { scale: 0.6 }, { scale: 1, duration: 1.2, ease: "elastic.out(1, .5)", delay: 0.35 });
     timer.classList.add("is-visible");
     gsap.fromTo(".timer__cell", { opacity: 0, y: 24, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, stagger: 0.1, duration: 0.9, ease: "back.out(1.6)", delay: 0.55 });
-
-    // music begins once the dates are revealed, not before
-    song.play().catch(() => {});
   });
 })();
 
